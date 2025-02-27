@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Radar Plotting</title>
+  <style>
+    /* Header Styles */
+    #header {
+      width: 100%;
+      background-color: #f2f2f2;
+      padding: 10px 0;
+      text-align: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      margin-bottom: 20px;
+    }
+    #header h1 {
+      margin: 0;
+      font-size: 32px;
+      color: #333;
+    }
+    
+    /* Page Styles */
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      background-color: white;
+      color: black;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 20px;
+      margin: 10px;
+    }
+    .canvas-container {
+      position: relative;
+      background-color: black;
+      padding: 20px;
+      border-radius: 50%;
+    }
+    canvas {
+      border-radius: 50%;
+      background-color: black;
+      display: block;
+    }
+    .controls {
+      background-color: gray;
+      padding: 15px;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+    }
+    .controls label,
+    .controls input,
+    .controls button {
+      margin-bottom: 5px;
+    }
+    .panel-other {
+      background-color: gray;
+      padding: 15px;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 200px;
+    }
+    .coordinate-display {
+      padding: 10px;
+      background-color: white;
+      border-radius: 5px;
+      color: black;
+      font-weight: bold;
+      text-align: center;
+    }
+    hr {
+      margin: 12px 0;
+    }
+    /* Custom Modal Styles */
+    .modal {
+      display: none; /* Hidden by default */
+      position: fixed;
+      z-index: 9999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.4);
+    }
+    .modal-content {
+      background-color: #fefefe;
+      margin: 15% auto;
+      padding: 20px;
+      border: 1px solid #888;
+      width: 300px;
+      text-align: center;
+      border-radius: 5px;
+    }
+    .modal-buttons {
+      margin-top: 15px;
+    }
+    .modal-buttons button {
+      margin: 0 10px;
+      padding: 5px 10px;
+    }
+    /* Credits Styles (placed under the panel-other) */
+    #credits {
+      font-size: 18px;
+      background-color: #ffffe0; /* Light yellow */
+      padding: 5px 10px;
+      border-radius: 5px;
+      box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+      text-align: center;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div id="header">
+    <h1>Radar Plotting</h1>
+  </div>
+
+  <div class="container">
+    <!-- Radar + Main Controls -->
+    <div class="canvas-container">
+      <canvas id="canvas" width="600" height="600"></canvas>
+    </div>
+    
+    <div class="controls">
+      <!-- Time of 1st Observation -->
+      <label for="time1">Time of 1st Observation (HH:MM):</label>
+      <input type="text" id="time1" placeholder="e.g. 09:30">
+      
+      <!-- Range1 / Bearing1 Controls -->
+      <label for="bearing1">Bearing 1 (degrees from North, clockwise):</label>
+      <input type="number" id="bearing1">
+      <label for="range1">Range 1 (nm, 0-12):</label>
+      <input type="number" id="range1" min="0" max="12" step="0.1">
+      <button onclick="drawLine1()">Draw Line 1</button>
+      <button onclick="clearCanvas1()">Clear Plot</button>
+      
+      <hr>
+      
+      <!-- Time of 2nd Observation -->
+      <label for="time2">Time of 2nd Observation (HH:MM):</label>
+      <input type="text" id="time2" placeholder="e.g. 10:45">
+      
+      <!-- Range2 / Bearing2 Controls -->
+      <label for="bearing2">Bearing 2 (degrees from North, clockwise):</label>
+      <input type="number" id="bearing2">
+      <label for="range2">Range 2 (nm, 0-12):</label>
+      <input type="number" id="range2" min="0" max="12" step="0.1">
+      <button onclick="drawLine2()">Draw Line 2</button>
+      <button onclick="clearCanvas2()">Clear Plot</button>
+      
+      <!-- New input fields for Ship Speed and Ship Heading -->
+      <label for="shipSpeed">Ship Speed (knots):</label>
+      <input type="number" id="shipSpeed" placeholder="e.g. 20" step="0.1">
+      <label for="shipHeading">Ship Heading (°):</label>
+      <input type="number" id="shipHeading" placeholder="e.g. 045" min="0" max="360" step="1">
+      
+      <hr>
+      
+      <!-- Connect and Extend Lines -->
+      <button onclick="connectAndExtendLine()">Connect & Extend Line</button>
+    </div>
+    
+    <!-- Panel for computed parameters -->
+    <div class="panel-other">
+      <div class="coordinate-display">
+        <label>Time Duration:</label>
+        <span id="timeDuration">0</span>
+      </div>
+      <div class="coordinate-display">
+        <label>CPA (CN) in nm:</label>
+        <span id="cpaValue">0</span>
+      </div>
+      <div class="coordinate-display">
+        <label>TCPA in mins:</label>
+        <span id="tcpaValue">0</span>
+      </div>
+      <div class="coordinate-display">
+        <label>Target Ship Course:</label>
+        <span id="targetShipCourse">0</span>
+      </div>
+      <div class="coordinate-display">
+        <label>Target Ship Speed (knots):</label>
+        <span id="targetShipSpeed">0</span>
+      </div>
+      <div class="coordinate-display">
+        <label>Aspect:</label>
+        <span id="aspect">0</span>
+      </div>
+      <div class="coordinate-display">
+        <label>Aspect Color:</label>
+        <span id="aspectColor">N/A</span>
+      </div>
+      <!-- Credits -->
+      <div id="credits">
+        By Capt.Dhakshina Perera<br>
+        dhakshina@maritx.com
+      </div>
+    </div>
+  </div>
+  
+  <!-- Custom Modal HTML -->
+  <div id="customModal" class="modal">
+    <div class="modal-content">
+      <h2>TIME INPUT</h2>
+      <p id="modalMessage"></p>
+      <input type="text" id="modalInput" />
+      <div class="modal-buttons">
+        <button id="modalOk">OK</button>
+        <button id="modalCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Function to determine which side of the WA vector point C lies.
+    // In the canvas coordinate system (y increases downward):
+    // If cross product > 0, C is to the right of WA → return "GREEN".
+    // If cross product < 0, C is to the left of WA → return "RED".
+    function determineSide(W_x, W_y, A_x, A_y, C_x, C_y) {
+      let WAx = A_x - W_x;
+      let WAy = A_y - W_y;
+      let WCx = C_x - W_x;
+      let WCy = C_y - W_y;
+      let cross = WAx * WCy - WAy * WCx;
+      if (cross > 0) return "GREEN";      // C is to the right
+      if (cross < 0) return "RED";        // C is to the left
+      return "COLLINEAR";
+    }
+    
+    // Custom prompt function using the modal.
+    function showCustomPrompt(message, defaultValue, callback) {
+      const modal = document.getElementById("customModal");
+      const modalMessage = document.getElementById("modalMessage");
+      const modalInput = document.getElementById("modalInput");
+      const modalOk = document.getElementById("modalOk");
+      const modalCancel = document.getElementById("modalCancel");
+      
+      modalMessage.innerText = message;
+      modalInput.value = defaultValue || "";
+      modal.style.display = "block";
+      modalInput.focus();
+      
+      function closeModal() {
+        modal.style.display = "none";
+        modalOk.onclick = null;
+        modalCancel.onclick = null;
+      }
+      
+      modalOk.onclick = function() {
+        const userInput = modalInput.value;
+        closeModal();
+        callback(userInput);
+      };
+      
+      modalCancel.onclick = function() {
+        closeModal();
+        callback(null);
+      };
+    }
+    
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = centerX - 20;
+    
+    // Conversion factors.
+    const UNITS_PER_NM = 280 / 12;
+    const NM_PER_UNIT = 12 / 280;
+    
+    let x1Global = 0; // Point O (relative to canvas center)
+    let y1Global = 0;
+    let x2Global = 0; // Point A (relative to canvas center)
+    let y2Global = 0;
+    
+    // Draw the radar grid (without any zoom transformation).
+    function drawGrid() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Outer circle.
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+      ctx.strokeStyle = "white";
+      ctx.stroke();
+      
+      // Cross axis lines.
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY - radius);
+      ctx.lineTo(centerX, centerY + radius);
+      ctx.moveTo(centerX - radius, centerY);
+      ctx.lineTo(centerX + radius, centerY);
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // Degree markers.
+      for (let i = 0; i < 360; i++) {
+        let angleRad = (i - 90) * (Math.PI / 180);
+        let xOuter = centerX + radius * Math.cos(angleRad);
+        let yOuter = centerY + radius * Math.sin(angleRad);
+        let xInner = centerX + (radius - 10) * Math.cos(angleRad);
+        let yInner = centerY + (radius - 10) * Math.sin(angleRad);
+        ctx.beginPath();
+        ctx.moveTo(xOuter, yOuter);
+        ctx.lineTo(xInner, yInner);
+        ctx.strokeStyle = "white";
+        ctx.stroke();
+        if (i % 10 === 0) {
+          let xLabel = centerX + (radius + 10) * Math.cos(angleRad);
+          let yLabel = centerY + (radius + 10) * Math.sin(angleRad);
+          ctx.fillStyle = "white";
+          ctx.font = "12px Arial";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(i.toString(), xLabel, yLabel);
+        }
+      }
+      
+      // Center dot and label "C".
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 5, 0, 2 * Math.PI);
+      ctx.fillStyle = "white";
+      ctx.fill();
+      ctx.fillStyle = "white";
+      ctx.font = "18px Arial";
+      ctx.fillText("C", centerX + 15, centerY + 10);
+    }
+    
+    function drawDotO(canvasX, canvasY) {
+      ctx.beginPath();
+      ctx.arc(canvasX, canvasY, 5, 0, 2 * Math.PI);
+      ctx.fillStyle = "yellow";
+      ctx.fill();
+      ctx.fillStyle = "yellow";
+      ctx.font = "18px Arial";
+      ctx.fillText("O", canvasX + 15, canvasY + 10);
+    }
+    
+    function drawDotA(canvasX, canvasY) {
+      ctx.beginPath();
+      ctx.arc(canvasX, canvasY, 5, 0, 2 * Math.PI);
+      ctx.fillStyle = "red";
+      ctx.fill();
+      ctx.fillStyle = "red";
+      ctx.font = "18px Arial";
+      ctx.fillText("A", canvasX + 15, canvasY + 10);
+    }
+    
+    function nmToUnits(nm) {
+      return nm * UNITS_PER_NM;
+    }
+    
+    function unitsToNm(u) {
+      return u * NM_PER_UNIT;
+    }
+    
+    function parseTime(str) {
+      let parts = str.split(":");
+      if (parts.length !== 2) return NaN;
+      let hh = parseFloat(parts[0]);
+      let mm = parseFloat(parts[1]);
+      if (isNaN(hh) || isNaN(mm)) return NaN;
+      return hh + mm / 60;
+    }
+    
+    // Main drawing routine.
+    function autoUpdateAll() {
+      drawGrid();
+      
+      // Calculate time difference.
+      const t1Str = document.getElementById("time1").value;
+      const t2Str = document.getElementById("time2").value;
+      let t1 = parseTime(t1Str);
+      let t2 = parseTime(t2Str);
+      let timeDiff = (!isNaN(t1) && !isNaN(t2)) ? t2 - t1 : 0;
+      const minutesDiff = timeDiff * 60;
+      document.getElementById("timeDuration").innerText = minutesDiff.toFixed(0) + " mins";
+      
+      // Process first observation (Point O).
+      const bearing1 = parseFloat(document.getElementById("bearing1").value);
+      const range1Nm = parseFloat(document.getElementById("range1").value);
+      let line1Valid = false;
+      if (!isNaN(bearing1) && !isNaN(range1Nm)) {
+        let angleRad1 = (bearing1 - 90) * (Math.PI / 180);
+        let range1Units = nmToUnits(range1Nm);
+        let xEnd1 = range1Units * Math.cos(angleRad1);
+        let yEnd1 = range1Units * Math.sin(angleRad1);
+        x1Global = xEnd1;
+        y1Global = yEnd1;
+        drawDotO(centerX + xEnd1, centerY + yEnd1);
+        line1Valid = true;
+      } else {
+        x1Global = 0;
+        y1Global = 0;
+      }
+      
+      // Process second observation (Point A).
+      const bearing2 = parseFloat(document.getElementById("bearing2").value);
+      const range2Nm = parseFloat(document.getElementById("range2").value);
+      let line2Valid = false;
+      if (!isNaN(bearing2) && !isNaN(range2Nm)) {
+        let angleRad2 = (bearing2 - 90) * (Math.PI / 180);
+        let range2Units = nmToUnits(range2Nm);
+        let xEnd2 = range2Units * Math.cos(angleRad2);
+        let yEnd2 = range2Units * Math.sin(angleRad2);
+        x2Global = xEnd2;
+        y2Global = yEnd2;
+        drawDotA(centerX + xEnd2, centerY + yEnd2);
+        line2Valid = true;
+      } else {
+        x2Global = 0;
+        y2Global = 0;
+      }
+      
+      // If both observations are valid, draw connecting lines and compute CPA/TCPA.
+      if (line1Valid && line2Valid) {
+        let dx = x2Global - x1Global;
+        let dy = y2Global - y1Global;
+        let distUnits = Math.sqrt(dx * dx + dy * dy);
+        if (distUnits > 0) {
+          let ux = dx / distUnits;
+          let uy = dy / distUnits;
+          let extendedDistUnits = distUnits + 400;
+          let xExt = x1Global + extendedDistUnits * ux;
+          let yExt = y1Global + extendedDistUnits * uy;
+          let canvasX1 = centerX + x1Global;
+          let canvasY1 = centerY + y1Global;
+          let canvasX2 = centerX + x2Global;
+          let canvasY2 = centerY + y2Global;
+          let canvasXExt = centerX + xExt;
+          let canvasYExt = centerY + yExt;
+          ctx.beginPath();
+          ctx.moveTo(canvasX1, canvasY1);
+          ctx.lineTo(canvasX2, canvasY2);
+          ctx.lineTo(canvasXExt, canvasYExt);
+          ctx.strokeStyle = "green";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          let dx2 = xExt - x1Global;
+          let dy2 = yExt - y1Global;
+          let denom = dx2 * dx2 + dy2 * dy2;
+          if (denom !== 0) {
+            let t = - (x1Global * dx2 + y1Global * dy2) / denom;
+            let px = x1Global + t * dx2;
+            let py = y1Global + t * dy2;
+            let cpx = centerX + px;
+            let cpy = centerY + py;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(cpx, cpy);
+            ctx.strokeStyle = "blue";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cpx, cpy, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = "blue";
+            ctx.fill();
+            ctx.fillStyle = "blue";
+            ctx.font = "18px Arial";
+            ctx.fillText("N", cpx + 15, cpy + 10);
+            let cnDistUnits = Math.sqrt(px * px + py * py);
+            let cnDistNm = unitsToNm(cnDistUnits);
+            document.getElementById("cpaValue").innerText = cnDistNm.toFixed(2);
+            let dx_AN = x2Global - px;
+            let dy_AN = y2Global - py;
+            let AN_units = Math.sqrt(dx_AN * dx_AN + dy_AN * dy_AN);
+            let tcpa = 6 * (AN_units / distUnits);
+            document.getElementById("tcpaValue").innerText = tcpa.toFixed(2);
+          }
+        } else {
+          document.getElementById("cpaValue").innerText = "0";
+          document.getElementById("tcpaValue").innerText = "0";
+        }
+      } else {
+        document.getElementById("cpaValue").innerText = "0";
+        document.getElementById("tcpaValue").innerText = "0";
+      }
+      
+      // Calculation for Point W and Target Ship parameters.
+      if (line1Valid && line2Valid) {
+        let shipSpeed = parseFloat(document.getElementById("shipSpeed").value);
+        let shipHeading = parseFloat(document.getElementById("shipHeading").value);
+        if (!isNaN(shipSpeed) && !isNaN(shipHeading)) {
+          let recshipco = (shipHeading + 180) % 360;
+          let wo = shipSpeed * minutesDiff / 60;
+          let woUnits = nmToUnits(wo);
+          let angleW = (recshipco - 90) * (Math.PI / 180);
+          let W_x = (centerX + x1Global) + woUnits * Math.cos(angleW);
+          let W_y = (centerY + y1Global) + woUnits * Math.sin(angleW);
+          
+          ctx.beginPath();
+          ctx.arc(W_x, W_y, 5, 0, 2 * Math.PI);
+          ctx.fillStyle = "magenta";
+          ctx.fill();
+          ctx.fillStyle = "magenta";
+          ctx.font = "18px Arial";
+          ctx.fillText("W", W_x + 15, W_y + 10);
+          
+          ctx.beginPath();
+          ctx.moveTo(W_x, W_y);
+          ctx.lineTo(centerX + x1Global, centerY + y1Global);
+          ctx.strokeStyle = "magenta";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          ctx.beginPath();
+          ctx.moveTo(W_x, W_y);
+          ctx.lineTo(centerX + x2Global, centerY + y2Global);
+          ctx.strokeStyle = "magenta";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          let A_x = centerX + x2Global;
+          let A_y = centerY + y2Global;
+          let dx_WA = A_x - W_x;
+          let dy_WA = A_y - W_y;
+          let distanceWA_units = Math.sqrt(dx_WA * dx_WA + dy_WA * dy_WA);
+          let WA_nm = unitsToNm(distanceWA_units);
+          let angleWA_rad = Math.atan2(dy_WA, dx_WA);
+          let targetShipCourse = (angleWA_rad * 180 / Math.PI + 90) % 360;
+          if (targetShipCourse < 0) targetShipCourse += 360;
+          document.getElementById("targetShipCourse").innerText = targetShipCourse.toFixed(0) + "°";
+          
+          let targetShipSpeed = 0;
+          if (minutesDiff > 0) {
+            targetShipSpeed = WA_nm * 60 / minutesDiff;
+          }
+          document.getElementById("targetShipSpeed").innerText = targetShipSpeed.toFixed(2) + " knots";
+          
+          // New Calculation: Aspect and Aspect Color.
+          // Compute ACBrg: the bearing from A to C.
+          let ACBrg = (Math.atan2(-y2Global, -x2Global) * 180 / Math.PI + 90) % 360;
+          if (ACBrg < 0) { ACBrg += 360; }
+          let aspect = Math.abs(ACBrg - targetShipCourse);
+          if (aspect > 180) { aspect = 360 - aspect; }
+          document.getElementById("aspect").innerText = aspect.toFixed(0) + "°";
+          
+          // Determine Aspect Color using the cross product test.
+          // W is at (W_x, W_y), A is at (centerX+x2Global, centerY+y2Global), and C is at (centerX, centerY).
+          let aspectColor = determineSide(W_x, W_y, centerX + x2Global, centerY + y2Global, centerX, centerY);
+          document.getElementById("aspectColor").innerText = aspectColor;
+        }
+      }
+    }
+    
+    function drawLine1() {
+      autoUpdateAll();
+    }
+    function drawLine2() {
+      autoUpdateAll();
+    }
+    function clearCanvas1() {
+      x1Global = 0;
+      y1Global = 0;
+      autoUpdateAll();
+    }
+    function clearCanvas2() {
+      x2Global = 0;
+      y2Global = 0;
+      autoUpdateAll();
+    }
+    function connectAndExtendLine() {
+      autoUpdateAll();
+    }
+    
+    // Custom time picker for 1st Observation.
+    function openTimePickerObs1() {
+      showCustomPrompt("Enter hours (0-23) for 1st Observation:", "", function(hours) {
+        if (hours === null) return;
+        let hh = parseInt(hours);
+        if (isNaN(hh) || hh < 0 || hh > 23) {
+          alert("Invalid hours.");
+          return;
+        }
+        showCustomPrompt("Enter minutes (0-59) for 1st Observation:", "", function(minutes) {
+          if (minutes === null) return;
+          let mm = parseInt(minutes);
+          if (isNaN(mm) || mm < 0 || mm > 59) {
+            alert("Invalid minutes.");
+            return;
+          }
+          let hhStr = hh.toString().padStart(2, "0");
+          let mmStr = mm.toString().padStart(2, "0");
+          let finalStr = `${hhStr}:${mmStr}`;
+          document.getElementById("time1").value = finalStr;
+          autoUpdateAll();
+          document.getElementById("time1").removeEventListener("focus", openTimePickerObs1);
+        });
+      });
+    }
+    
+    // Custom time picker for 2nd Observation.
+    function openTimePickerObs2() {
+      showCustomPrompt("Enter hours (0-23) for 2nd Observation:", "", function(hours) {
+        if (hours === null) return;
+        let hh = parseInt(hours);
+        if (isNaN(hh) || hh < 0 || hh > 23) {
+          alert("Invalid hours.");
+          return;
+        }
+        showCustomPrompt("Enter minutes (0-59) for 2nd Observation:", "", function(minutes) {
+          if (minutes === null) return;
+          let mm = parseInt(minutes);
+          if (isNaN(mm) || mm < 0 || mm > 59) {
+            alert("Invalid minutes.");
+            return;
+          }
+          let hhStr = hh.toString().padStart(2, "0");
+          let mmStr = mm.toString().padStart(2, "0");
+          let finalStr = `${hhStr}:${mmStr}`;
+          document.getElementById("time2").value = finalStr;
+          autoUpdateAll();
+          document.getElementById("time2").removeEventListener("focus", openTimePickerObs2);
+        });
+      });
+    }
+    
+    const time1Input = document.getElementById("time1");
+    time1Input.addEventListener("focus", openTimePickerObs1, { once: true });
+    const time2Input = document.getElementById("time2");
+    time2Input.addEventListener("focus", openTimePickerObs2, { once: true });
+    
+    document.getElementById("time1").addEventListener("input", autoUpdateAll);
+    document.getElementById("time2").addEventListener("input", autoUpdateAll);
+    document.getElementById("bearing1").addEventListener("input", autoUpdateAll);
+    document.getElementById("range1").addEventListener("input", autoUpdateAll);
+    document.getElementById("bearing2").addEventListener("input", autoUpdateAll);
+    document.getElementById("range2").addEventListener("input", autoUpdateAll);
+    document.getElementById("shipSpeed").addEventListener("input", autoUpdateAll);
+    document.getElementById("shipHeading").addEventListener("input", autoUpdateAll);
+    
+    drawGrid();
+  </script>
+</body>
+</html>
